@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: reader
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: reader
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: reader
+    spec:
+      initContainers:
+        - name: init-create-file
+          image: busybox
+          command:
+            - sh
+            - -c
+            - |
+              touch /data/input.txt
+          volumeMounts:
+            - name: input-volume
+              mountPath: /data
+      containers:
+      - name: reader
+        image: docker.io/cytram/messaging-system-reader:0.1.0
+        env:
+        - name: REDIS_ADDR
+          value: "redis:6379"
+        volumeMounts:
+        - name: input-volume
+          mountPath: /data
+      - name: random
+        image: bash
+        command: ["bash", "/scripts/random-write.sh"]
+        volumeMounts:
+          - name: input-volume
+            mountPath: /data
+          - name: script-volume
+            mountPath: /scripts
+      volumes:
+      - name: input-volume
+        emptyDir: {}
+      - name: script-volume
+        configMap:
+          name: random-writer-script
+          defaultMode: 0755
+---
+apiVersion: v1
+data:
+  random-write.sh: |-
+    OUTPUT_FILE="/data/input.txt"
+
+    > "$OUTPUT_FILE"
+
+    echo "Writing random text every second to $OUTPUT_FILE..."
+
+    while true; do
+      LINE=""
+      for ((j=0; j<10; j++)); do
+        WORD_LENGTH=$((RANDOM % 6 + 5))
+        WORD=$(tr -dc 'a-z' < /dev/urandom | fold -w $WORD_LENGTH | head -n 1)
+        LINE+="$WORD "
+      done
+      echo "$LINE" >> "$OUTPUT_FILE"
+      sleep 1
+    done
+kind: ConfigMap
+metadata:
+  name: random-writer-script
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: reader
+spec:
+  selector:
+    app.kubernetes.io/name: reader
+  ports:
+  - port: 8080
+    targetPort: 8080

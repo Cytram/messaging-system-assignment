@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: monitoring
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+
+    scrape_configs:
+      - job_name: 'writer'
+        static_configs:
+          - targets: ['writer.default.svc.cluster.local:8080']
+    
+      - job_name: 'reader'
+        static_configs:
+          - targets: ['reader.default.svc.cluster.local:8080']
+    
